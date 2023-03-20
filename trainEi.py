@@ -25,16 +25,16 @@ def parse():
     parser = argparse.ArgumentParser()
     # training setting
     parser.add_argument('--model_name', default='test')
-    parser.add_argument('--epochs', type=int, default=60)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--lr', type=float, default=1e-4)
     # I/O setting
     parser.add_argument('--saving_folder', default='ckpts')
     # 
     parser.add_argument('--device', default='cuda')
-    parser.add_argument('--gpus', type=int, default=4)
+    parser.add_argument('--gpus', type=int, default=2)
     # Visdom setting
-    parser.add_argument('--port', type=int, default=1203)
+    parser.add_argument('--port', type=int, default=6006)
     parser.add_argument('--env', default="test")
     parser.add_argument('--visual_loss_step', type=int, default=10)
     parser.add_argument('--visual_output_step', type=int, default=50)
@@ -51,19 +51,20 @@ class Model_factory():
         self.vis = vis
         self.device = args.device
         
-        trainDataset = IdentityDataset(augment=True, train=True)
+        trainDataset = IdentityDataset(path='../DMX/m_black_1', augment=True, train=True)
         self.trainDataloader = DataLoader(dataset=trainDataset,
                                           batch_size=args.batch_size,
                                           shuffle=True, 
                                           num_workers=cpu_count())
-        testDataset = IdentityDataset(augment=False, train=False)
+        testDataset = IdentityDataset(path='../DMX/m_black_1', augment=False, train=False)
         self.testDataloader = DataLoader(dataset=testDataset,
                                          batch_size=args.batch_size,
                                          shuffle=False, 
                                          num_workers=cpu_count())
         
-        self.AE = IdentityAE(input_size=[384, 512], hidden_size=256, num_layers=2, heads=8, dropout=0.1)
+        self.AE = IdentityAE()
         self.AE = DataParallel(self.AE, device_ids=[i for i in range(self.args.gpus)]).to(self.device)
+        # self.AE = torch.compile(self.AE)
         self.ema = ExponentialMovingAverage(self.AE.parameters(), decay=0.995)
         
         self.optimizer = optim.AdamW(self.AE.parameters(), lr=args.lr)
@@ -86,7 +87,7 @@ class Model_factory():
 
             rec = self.AE(self.img)
             loss = self.rec_criterion(self.img, rec)
-            
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
